@@ -1,8 +1,13 @@
 import TokenFactoryABI from './TokenFactory.json'
+import LiquidityPoolABI from './LiquidityPool.json'
 import MyTokenABI from './MyToken.json'
+import IWETHABI from './WETH9.json'
 import Web3 from 'web3'
+import { string } from 'zod'
 
 const TOKEN_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS;
+const LIQUIDITY_CREATION_ADDRESS = process.env.NEXT_PUBLIC_LIQUIDITY_POOL_ADDRESS;
+const WETH_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_WETH_ADDRESS
 
 type TokenParams = {
     name: string
@@ -16,12 +21,26 @@ type TokenAdded = {
     tokenSymbol: string
 }
 
+type CreateTokenType = {
+    customToken: string,
+    genericToken: string
+    amount0: number
+    amount1: number
+    owner: string
+}
+
 export const getWeb3 = async () => {
     let web3;
     if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
         // We are in the browser and metamask is running.
         window.ethereum.request({ method: "eth_requestAccounts" });
         web3 = new Web3(window.ethereum);
+        return web3;
+    } else {
+        const provider = new Web3.providers.HttpProvider(
+            `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+        );
+        web3 = new Web3(provider);
         return web3;
     }
 
@@ -34,6 +53,33 @@ export const createTokenContract = async () => {
         window.ethereum.request({ method: "eth_requestAccounts" });
         web3 = new Web3(window.ethereum);
         const instance = new web3.eth.Contract(TokenFactoryABI.abi, TOKEN_FACTORY_ADDRESS)
+        return instance
+    } else {
+        web3 = await getWeb3();
+        const instance = new web3.eth.Contract(TokenFactoryABI.abi, TOKEN_FACTORY_ADDRESS)
+        return instance
+    }
+}
+
+export const liquidityTokenContract = async () => {
+    let web3;
+    if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+        // We are in the browser and metamask is running.
+        window.ethereum.request({ method: "eth_requestAccounts" });
+        web3 = new Web3(window.ethereum);
+        const instance = new web3.eth.Contract(LiquidityPoolABI.abi, LIQUIDITY_CREATION_ADDRESS)
+        return instance
+    }
+
+}
+
+export const wrapEthContract = async () => {
+    let web3;
+    if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+        // We are in the browser and metamask is running.
+        window.ethereum.request({ method: "eth_requestAccounts" });
+        web3 = new Web3(window.ethereum);
+        const instance = new web3.eth.Contract(IWETHABI.abi, WETH_CONTRACT_ADDRESS)
         return instance
     }
 }
@@ -86,7 +132,24 @@ export const fetchCreatedTokens = async() => {
     }
 }
 
-// 0x0228B80ca54C8053f6BB85cF6E618e6c69804dee
-// Refactor code
-// Automatically add to metamask
-// Image?
+export const createTokenLiquidityPool = async(customToken, genericToken, amount0, amount1, owner) => {
+    const web3 = await getWeb3()
+    try {
+        const contract = await liquidityTokenContract();
+        const data = await contract?.methods.mintNewPosition(customToken, genericToken, amount0, web3.utils.toWei(amount1, 'ether'), owner).send({ from: owner })
+        if(data) return data
+    } catch (error) {
+        console.log("Error minting new position:", error)
+    }
+}
+
+export const wrapEth = async(amount: number, address: string) => {
+    const web3 = await getWeb3()
+    try {
+        const contract = await wrapEthContract();
+        const data = await contract?.methods.deposit().send({from: address, value: web3.utils.toWei(amount, 'ether')})
+        if(data) return data
+    } catch (error) {
+        console.log("Error minting new position:", error)
+    }
+}
